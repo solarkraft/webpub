@@ -1,0 +1,23 @@
+{
+  "name": "webread",
+  "version": "0.0.1",
+  "description": "Generate an epub file from a web page",
+  "scripts": {
+    "start": "npx ts-node ./src/main.ts"
+  },
+  "author": "solarkraft",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^17.0.13",
+    "@types/postlight__mercury-parser": "^2.2.4",
+    "@types/sanitize-html": "^2.6.2",
+    "sanitize-html": "^2.6.1",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.5.5"
+  },
+  "dependencies": {
+    "@postlight/mercury-parser": "^2.2.1",
+    "html-entities": "^2.3.2",
+    "nodepub": "^3.0.7"
+  }
+}
