@@ -2,12 +2,15 @@ let nodepub = require('nodepub');
 import Mercury from '@postlight/mercury-parser';
 import sanitizeHtml from 'sanitize-html';
 import { decode } from 'html-entities';
+import * as fs from 'fs'
+import * as canvas from 'canvas'
 
 const args: string[] = process.argv;
 
 async function main(args: string[]) {
+    let id = Math.random().toString().substr(2, 8);
+
     let urlString: string;
-    
     urlString = args[2];
     if (!urlString) {
         console.error("Give me a URL, please");
@@ -18,7 +21,7 @@ async function main(args: string[]) {
 
     console.info("Parsing web page "+url.toString());
 
-    let page = await Mercury.parse(url.toString())
+    let page = await Mercury.parse(url.toString());
 
     // Sanitize HTML. Removes forbidden tags and cleans up some bad syntax like improperly closed tags.
     let content = sanitizeHtml(page.content as string, {
@@ -30,13 +33,20 @@ async function main(args: string[]) {
     // Decode HTML entities
     let description = decode(page.excerpt);
 
+    // Generate cover image
+    console.info("Generating cover image");
+    await createCoverImage(`/tmp/cover_${id}.png`, page.title || page.url);
+    console.info("Wrote cover image");
+
     // Metadata for the epub file
     let meta = {
-        id: Math.random().toString().substr(2, 8), // Required. Maybe hash url?
-        cover: 'test-cover.png', // Required (eh). TODO: Remove requirement or generate
-        title: page.title, // Required
-        author: page.author || "unknown author", // Required
+        // Required
+        id: id,
+        cover: `/tmp/cover_${id}.png`,
+        title: page.title,
+        author: page.author || "unknown author",
 
+        // Optional
         description: description,
         showContents: false,
         source: url.toString(),
@@ -58,15 +68,7 @@ async function main(args: string[]) {
 
     console.debug("Content: ", content);
 
-    // Avoids having to add it as an extra section, which would be shown on a different page
-    let contentWithExtras = '<h1>'+page.title+'</h1>' + content;
-
-    // book.addSection("Preface", 
-    //     '<h1>'+page.title+'</h1>'
-    //     +'This epub file was generated from '+url
-    // ,false, true);
-
-    book.addSection(page.title, contentWithExtras, false, false);
+    book.addSection(page.title, content, false, false);
     
     // Turn into (somewhat) friendly file name
     let pageName = url.pathname.toString() + url.searchParams.toString();
@@ -79,6 +81,69 @@ async function main(args: string[]) {
     await book.writeEPUB('./', fileName);
 
     console.info("Done :-)");
+}
+
+async function createCoverImage(path: string, title: string) {
+    return new Promise<void>(resolve => {
+        const coverImage = canvas.createCanvas(600, 800);
+        const ctx = coverImage.getContext('2d');
+
+        let drawTitle = (title: string, fontSize: number) => {
+            // Clear
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, coverImage.width, coverImage.height);
+            ctx.fillStyle = 'black';
+
+            ctx.font = fontSize + 'px sans-serif'
+
+            let sideMargin = 50;
+            let topMargin = 200;
+            let bottomMargin = 100;
+
+            let x = sideMargin;
+            let y = topMargin; // Starting height
+
+            let lastLine = '';
+            let newLine = '';
+
+            title.split(' ').forEach(async (word, i) => {
+                newLine = lastLine + word + " ";
+
+                if (ctx.measureText(newLine).width + x*2 < coverImage.width) {
+                    lastLine = newLine;
+                } else {
+                    // break line and write last one
+                    ctx.fillText(lastLine, x, y);
+
+                    // Continue on next line
+                    y += fontSize;
+                    
+                    // Clear next line (except last word)
+                    lastLine = word + " ";
+                }
+            });
+            // Write last line
+            ctx.fillText(lastLine, x, y);
+
+            // Did we exceed the canvas' height?
+            if(y+bottomMargin > coverImage.height) {
+
+                // Let's try again
+                drawTitle(title, fontSize-20);
+            }
+        }
+
+        drawTitle(title, 160)
+
+        // Save image
+        coverImage.createPNGStream();
+
+        const out = fs.createWriteStream(path)
+        const stream = coverImage.createPNGStream();
+        out.on('finish', () =>  resolve())
+
+        stream.pipe(out)
+    });
 }
 
 main(args);

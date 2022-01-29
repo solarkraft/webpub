@@ -1,6 +1,6 @@
 {
   "name": "webread",
-  "version": "0.0.1",
+  "version": "0.2",
   "description": "Generate an epub file from a web page",
   "scripts": {
     "start": "npx ts-node ./src/main.ts"
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@postlight/mercury-parser": "^2.2.1",
+    "canvas": "^2.9.0",
     "html-entities": "^2.3.2",
     "nodepub": "^3.0.7"
   }
