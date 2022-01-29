@@ -7,12 +7,13 @@ import canvas from 'canvas';
 import * as cheerio from 'cheerio';
 import fetch from 'node-fetch';
 import { tmpdir } from "os";
+import path from "path/posix";
 
 const args: string[] = process.argv;
 
 async function main(args: string[]) {
     let id = Math.random().toString().substr(2, 8);
-    
+
     let tmpDir = tmpdir() + `/epub/${id}/`;
     // console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
 
@@ -21,13 +22,14 @@ async function main(args: string[]) {
     let urlString = args[2];
     if (!urlString) {
         console.error("Give me a URL, please");
-        process.exit();
+        process.exit(1);
     }
 
     let url = new URL(urlString);
 
     console.info("Parsing web page " + url.toString());
 
+    // Parse page using Mercury
     let page = await Mercury.parse(url.toString());
 
     // Sanitize HTML. Removes forbidden tags and cleans up some bad syntax like improperly closed tags.
@@ -64,29 +66,27 @@ async function main(args: string[]) {
         // Required
         id: id,
         cover: tmpDir + "cover.png",
-        title: page.title || "No Title",
-        author: page.author || "unknown author",
+        title: page.title || page.url,
+        author: page.author || page.domain,
 
         // Optional
         description: description,
-        showContents: false,
+        showContents: false, // There is only one section
         source: url.toString(),
+        images: images, // List of image file paths that will be included
 
-        // published: '2000-12-31', // Not required, but validator complains if unset
+        published: page.date_published || "", // Not required, but validator complains if unset
         // language: 'en', // Not required, but validator complains if unset
 
-        // series: 'My Series',
-        // publisher: 'My Fake Publisher',
-
-        // contents: 'Table of Contents',
-        images: images
+        series: page.domain,
+        publisher: page.domain,
     };
 
     let book = nodepub.document(meta);
 
     console.info("Creating E-Book");
 
-    book.addSection(page.title || "No Title", content, false);
+    book.addSection(meta.title, content, false);
 
     // Turn into (somewhat) friendly file name
     let pageName = url.pathname.toString() + url.searchParams.toString();
@@ -173,14 +173,17 @@ async function fetchAndReplaceImages(oldContent: string, tmpPath: string): Promi
         let imgElements = Array<cheerio.Element>();
         html('img').map((_, img) => imgElements.push(img));
 
+        // Create list for files to be downloaded
         // Original URL, new path, image element
         let downloadList = Array<[string, string, cheerio.Element]>();
-
         imgElements.forEach((img) => {
             let originalUrl = img.attribs["src"];
 
-            // iBooks wants any image file extension to render. Doesn't have to match the actual file type. 
-            let newName = Math.random().toString().substr(2, 8)+".png";
+            // iBooks wants any image file extension to render. 
+            // Doesn't *have to* match the actual file type, but a mismatch causes a warning. 
+            let ext = path.parse(originalUrl).ext || "png";
+            let newName = Math.random().toString().substr(2, 8) + "." + ext;
+
             downloadList.push([originalUrl, newName, img]);
         });
 
@@ -193,8 +196,13 @@ async function fetchAndReplaceImages(oldContent: string, tmpPath: string): Promi
                 // Write file
                 await fs.promises.writeFile(tmpPath + newName, response.body || "failed");
 
-                // Replace reference
+                // Replace reference ("../images/" is a hard coded path nodepub copies files to)
                 element.attribs["src"] = "../images/" + newName;
+
+                // If there's no alt tag, add an empty one (avoids warning)
+                if (!element.attribs["alt"]) {
+                    element.attribs["alt"] = "";
+                }
 
                 // Resolve promise
                 if (response.body) { resolve(); } else { reject(new Error("Request failed")); }
