@@ -10,16 +10,7 @@ import { decode } from "html-entities";
 import * as cheerio from "cheerio";
 import fetch from "node-fetch";
 
-export async function makeEpub(url: URL) {
-	let id = Math.random().toString().substr(2, 8);
-
-	let tmpDir = tmpdir() + `/epub/${id}/`;
-	// console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
-
-	await fs.promises.mkdir(tmpDir, { recursive: true });
-
-	console.info("Parsing web page " + url.toString());
-
+async function parsePage(url: URL) {
 	// Parse page using Mercury
 	let page = await Mercury.parse(url.toString());
 
@@ -81,6 +72,21 @@ export async function makeEpub(url: URL) {
 	// Decode HTML entities
 	let description = decode(page.excerpt);
 
+	return { content, description, page }
+}
+
+export async function makeEpub(url: URL) {
+	let id = Math.random().toString().substr(2, 8);
+
+	let tmpDir = tmpdir() + `/epub/${id}/`;
+	// console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
+
+	await fs.promises.mkdir(tmpDir, { recursive: true });
+
+	console.info("Parsing web page " + url.toString());
+
+	let { content, description, page } = await parsePage(url)
+	
 	let createCover = async () => {
 		// Generate cover image
 		console.info("Generating cover image");
