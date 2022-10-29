@@ -1,23 +1,170 @@
-<form action="" method="get">
-	<label for="book_title">Book Title</label>
-	<input type="text" name="book_title" placeholder="Empty: Title of first page" />
-	<br />
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+		<title>Webpub</title>
 
-	<input type="checkbox" name="make_epub" checked disabled /> <label for="make_epub">Make epub</label>
-	<br />
+		<style>
+			body {
+				font-family: sans-serif;
+				text-align: center;
+			}
+			.section {
+				margin: 14px;
+			}
+			.section br {
+				margin: 4px;
+			}
 
-	<input type="checkbox" name="save_file" disabled /> <label for="save_file">Save file on server</label>
-	<br />
+			#submit_button {
+				padding: 8px 64px;
+				margin-top: 14px;
+			}
+		</style>
+	</head>
+	<body>
+		<form action="" method="get">
+			<h1>Webpub</h1>
+			<p>Give me a website, I'll make you an epub.</p>
 
-	<label for="url">Article URL</label> <input type="text" name="url" placeholder="URL of your article" />
-	<br />
-	<label for="title">Custom Title</label> <input type="text" name="title" placeholder="Title (space to fetch)" />
-	<br />
+			<label for="book_title">Book Title</label>
+			<input type="text" name="book_title" placeholder="If empty: Title of first section" />
+			<br />
 
-	<label for="url">Article URL</label> <input type="text" name="url" placeholder="URL of your article" />
-	<br />
-	<label for="title">Custom Title</label> <input type="text" name="title" placeholder="Title (space to fetch)" />
-	<br />
+			<div id="sections_holder">
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
 
-	<input type="submit" value="Submit" />
-</form>
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+
+				<div class="section">
+					<label for="url">Article URL</label>
+					<input type="text" name="url" placeholder="URL of your article" />
+					<br />
+					<label for="title">Custom Title</label>
+					<input type="text" name="title" placeholder="Optional" />
+					<br />
+				</div>
+			</div>
+
+			<button type="button" onclick="addSection();">Add section</button>
+			<br />
+
+			<input id="submit_button" type="submit" value="Let's read" />
+		</form>
+
+		<script>
+			// Reset to normal view when JS is available
+			var sectionsHolder = document.getElementById("sections_holder")
+			var sections = sectionsHolder.children
+			while (sections.length > 1) {
+				sections[1].remove()
+			}
+
+			// This is likely way too new for some devices
+            // Todo: Do this in a backwards compatible manner
+			function addSection() {
+				var el = sectionsHolder.firstElementChild.cloneNode(true)
+				sectionsHolder.appendChild(el)
+				// Reset text
+				el.querySelectorAll("input").forEach((i) => (i.value = ""))
+			}
+		</script>
+	</body>
+</html>
