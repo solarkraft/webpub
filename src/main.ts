@@ -2,6 +2,8 @@ import * as fs from "fs"
 
 import Koa, { Context } from "koa"
 import koaBody from "koa-body"
+import mount from "koa-mount"
+import serve from "koa-static"
 
 import { makeEpub } from "./epub.js" // https://github.com/TypeStrong/ts-node/issues/1777
 
@@ -12,6 +14,9 @@ let directories = new Map<string, string>([
 ])
 
 const app = new Koa()
+
+app.use(mount("/", serve("./static")))
+
 app.use(koaBody({ includeUnparsed: true }))
 
 app.use(async (ctx: Context) => {
