@@ -1,228 +1,392 @@
-import * as nodepub from "nodepub";
-import Mercury from '@postlight/mercury-parser';
-import sanitizeHtml from 'sanitize-html';
-import { decode } from 'html-entities';
-import * as fs from 'fs'
-import canvas from 'canvas';
-import * as cheerio from 'cheerio';
-import fetch from 'node-fetch';
+import * as fs from "fs";
 import { tmpdir } from "os";
 import path from "path/posix";
 
-const args: string[] = process.argv;
+import Mercury from "@postlight/mercury-parser";
+import canvas from "canvas";
+import * as nodepub from "nodepub";
+import sanitizeHtml from "sanitize-html";
+import { decode } from "html-entities";
+import * as cheerio from "cheerio";
+import fetch from "node-fetch";
 
-async function main(args: string[]) {
-    let id = Math.random().toString().substr(2, 8);
+// Token, destination directory
+let directories = new Map<string, string>([
+	["a", "/tmp/"],
+	["b", "/data/reading/Web"],
+]);
 
-    let tmpDir = tmpdir() + `/epub/${id}/`;
-    // console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
+const makeEpub = async (url: URL) => {
+	let id = Math.random().toString().substr(2, 8);
 
-    await fs.promises.mkdir(tmpDir, { recursive: true });
+	let tmpDir = tmpdir() + `/epub/${id}/`;
+	// console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
 
-    let urlString = args[2];
-    if (!urlString) {
-        console.error("Give me a URL, please");
-        process.exit(1);
-    }
+	await fs.promises.mkdir(tmpDir, { recursive: true });
 
-    let url = new URL(urlString);
+	console.info("Parsing web page " + url.toString());
 
-    console.info("Parsing web page " + url.toString());
+	// Parse page using Mercury
+	let page = await Mercury.parse(url.toString());
 
-    // Parse page using Mercury
-    let page = await Mercury.parse(url.toString());
+	// Sanitize HTML. Removes forbidden tags and cleans up some bad syntax like improperly closed tags.
+	let content = sanitizeHtml(page.content as string, {
+		// disallowedTagsMode: "escape", // show removed tags
+		// Epub allow list, except "script"
+		allowedTags: [
+			"a",
+			"abbr",
+			"acronym",
+			"address",
+			"applet",
+			"b",
+			"bdo",
+			"big",
+			"blockquote",
+			"br",
+			"cite",
+			"code",
+			"del",
+			"dfn",
+			"div",
+			"dl",
+			"em",
+			"h1",
+			"h2",
+			"h3",
+			"h4",
+			"h5",
+			"h6",
+			"hr",
+			"i",
+			"iframe",
+			"img",
+			"ins",
+			"kbd",
+			"map",
+			"noscript",
+			"ns:svg",
+			"object",
+			"ol",
+			"p",
+			"pre",
+			"q",
+			"samp",
+			/*"script",*/ "small",
+			"span",
+			"strong",
+			"sub",
+			"sup",
+			"table",
+			"tt",
+			"ul",
+			"var",
+		],
+	});
 
-    // Sanitize HTML. Removes forbidden tags and cleans up some bad syntax like improperly closed tags.
-    let content = sanitizeHtml(page.content as string, {
-        // disallowedTagsMode: "escape", // show removed tags
-        // Epub allow list, except "script"
-        allowedTags: ["a", "abbr", "acronym", "address", "applet", "b", "bdo", "big", "blockquote", "br", "cite", "code", "del", "dfn", "div", "dl", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "iframe", "img", "ins", "kbd", "map", "noscript", "ns:svg", "object", "ol", "p", "pre", "q", "samp", /*"script",*/ "small", "span", "strong", "sub", "sup", "table", "tt", "ul", "var"],
-    });
+	// Decode HTML entities
+	let description = decode(page.excerpt);
 
-    // Decode HTML entities
-    let description = decode(page.excerpt);
+	let createCover = async () => {
+		// Generate cover image
+		console.info("Generating cover image");
+		await createCoverImage(tmpDir + "cover.png", page.title || page.url);
+		console.info("Wrote cover image");
+	};
 
-    let createCover = async () => {
-        // Generate cover image
-        console.info("Generating cover image");
-        await createCoverImage(tmpDir + "cover.png", page.title || page.url);
-        console.info("Wrote cover image");
-    }
+	// List of image paths
+	let images = Array<string>();
 
-    // List of image paths
-    let images = Array<string>();
+	let getImages = async () => {
+		console.info("Getting images");
+		[content, images] = await fetchAndReplaceImages(content, tmpDir);
+		console.info("Got all images");
+	};
 
-    let getImages = async () => {
-        console.info("Getting images");
-        [content, images] = await fetchAndReplaceImages(content, tmpDir);
-        console.info("Got all images");
-    }
+	// Do these simultaneously because both can take a while
+	await Promise.all([createCover(), getImages()]);
 
-    // Do these simultaneously because both can take a while
-    await Promise.all([createCover(), getImages()]);
+	// Metadata for the epub file
+	let meta = {
+		// Required
+		id: id,
+		cover: tmpDir + "cover.png",
+		title: page.title || page.url,
+		author: page.author || page.domain,
 
-    // Metadata for the epub file
-    let meta = {
-        // Required
-        id: id,
-        cover: tmpDir + "cover.png",
-        title: page.title || page.url,
-        author: page.author || page.domain,
+		// Optional
+		description: description,
+		showContents: false, // There is only one section
+		source: url.toString(),
+		images: images, // List of image file paths that will be included
 
-        // Optional
-        description: description,
-        showContents: false, // There is only one section
-        source: url.toString(),
-        images: images, // List of image file paths that will be included
+		published: page.date_published || "", // Not required, but validator complains if unset
+		// language: 'en', // Not required, but validator complains if unset
 
-        published: page.date_published || "", // Not required, but validator complains if unset
-        // language: 'en', // Not required, but validator complains if unset
+		series: page.domain,
+		publisher: page.domain,
+	};
 
-        series: page.domain,
-        publisher: page.domain,
-    };
+	let book = nodepub.document(meta);
 
-    let book = nodepub.document(meta);
+	console.info("Creating E-Book");
 
-    console.info("Creating E-Book");
+	book.addSection(meta.title, content, false);
 
-    book.addSection(meta.title, content, false);
+	// Turn into (somewhat) friendly file name
+	let pageName = url.pathname.toString() + url.searchParams.toString();
+	let fileName = pageName
+		.replace(/[^a-z0-9\.]/gi, "_") // turn non-letters into underscores
+		.toLowerCase()
+		.replace(/^_+|_+$/g, ""); // strip underscores from beginning and end
 
-    // Turn into (somewhat) friendly file name
-    let pageName = url.pathname.toString() + url.searchParams.toString();
-    let fileName = pageName
-        .replace(/[^a-z0-9\.]/gi, '_') // turn non-letters into underscores
-        .toLowerCase()
-        .replace(/^_+|_+$/g, ''); // strip underscores from beginning and end
+	console.info("Writing E-Book to " + fileName);
+	await book.writeEPUB("./", fileName);
 
-    console.info("Writing E-Book to " + fileName);
-    await book.writeEPUB('./', fileName);
+	console.info(`Writing file to ${tmpDir}/${fileName}.epub`);
+	await book.writeEPUB(tmpDir, fileName);
 
-    console.info("Done :-)");
-}
+	let filePath = tmpDir + fileName + ".epub";
+	return filePath;
+};
 
 async function createCoverImage(path: string, title: string) {
-    return new Promise<void>(resolve => {
-        const coverImage = canvas.createCanvas(600, 800);
-        const ctx = coverImage.getContext('2d');
+	return new Promise<void>((resolve) => {
+		const coverImage = canvas.createCanvas(600, 800);
+		const ctx = coverImage.getContext("2d");
 
-        let drawTitle = (title: string, fontSize: number) => {
-            // Clear
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, coverImage.width, coverImage.height);
-            ctx.fillStyle = 'black';
+		let drawTitle = (title: string, fontSize: number) => {
+			// Clear
+			ctx.fillStyle = "white";
+			ctx.fillRect(0, 0, coverImage.width, coverImage.height);
+			ctx.fillStyle = "black";
 
-            ctx.font = fontSize + 'px sans-serif'
+			ctx.font = fontSize + "px sans-serif";
 
-            let sideMargin = 50;
-            let topMargin = 200;
-            let bottomMargin = 100;
+			let sideMargin = 50;
+			let topMargin = 200;
+			let bottomMargin = 100;
 
-            let x = sideMargin;
-            let y = topMargin; // Starting height
+			let x = sideMargin;
+			let y = topMargin; // Starting height
 
-            let lastLine = '';
-            let newLine = '';
+			let lastLine = "";
+			let newLine = "";
 
-            title.split(' ').forEach(async (word, i) => {
-                newLine = lastLine + word + " ";
+			title.split(" ").forEach(async (word, i) => {
+				newLine = lastLine + word + " ";
 
-                if (ctx.measureText(newLine).width + x * 2 < coverImage.width) {
-                    lastLine = newLine;
-                } else {
-                    // break line and write last one
-                    ctx.fillText(lastLine, x, y);
+				if (ctx.measureText(newLine).width + x * 2 < coverImage.width) {
+					lastLine = newLine;
+				} else {
+					// break line and write last one
+					ctx.fillText(lastLine, x, y);
 
-                    // Continue on next line
-                    y += fontSize;
+					// Continue on next line
+					y += fontSize;
 
-                    // Clear next line (except last word)
-                    lastLine = word + " ";
-                }
-            });
-            // Write last line
-            ctx.fillText(lastLine, x, y);
+					// Clear next line (except last word)
+					lastLine = word + " ";
+				}
+			});
+			// Write last line
+			ctx.fillText(lastLine, x, y);
 
-            // Did we exceed the canvas' height?
-            if (y + bottomMargin > coverImage.height) {
+			// Did we exceed the canvas' height?
+			if (y + bottomMargin > coverImage.height) {
+				// Let's try again
+				drawTitle(title, fontSize - 20);
+			}
+		};
 
-                // Let's try again
-                drawTitle(title, fontSize - 20);
-            }
-        }
+		drawTitle(title, 160);
 
-        drawTitle(title, 160)
+		// Save image
+		coverImage.createPNGStream();
 
-        // Save image
-        coverImage.createPNGStream();
+		const out = fs.createWriteStream(path);
+		const stream = coverImage.createPNGStream();
+		out.on("finish", () => resolve());
 
-        const out = fs.createWriteStream(path)
-        const stream = coverImage.createPNGStream();
-        out.on('finish', () => resolve())
-
-        stream.pipe(out)
-    });
+		stream.pipe(out);
+	});
 }
 
 /** Download images from the web, place them in the temp folder and replace references in the HTML. returns the new content and the list of images */
-async function fetchAndReplaceImages(oldContent: string, tmpPath: string): Promise<[string, Array<string>]> {
-    return new Promise<[string, Array<string>]>(async (resolve, reject) => {
-        const html = cheerio.load(oldContent, { xml: true });
-        const root = html.root();
+async function fetchAndReplaceImages(
+	oldContent: string,
+	tmpPath: string
+): Promise<[string, Array<string>]> {
+	return new Promise<[string, Array<string>]>(async (resolve, reject) => {
+		const html = cheerio.load(oldContent, { xml: true });
+		const root = html.root();
 
-        let imgElements = Array<cheerio.Element>();
-        html('img').map((_, img) => imgElements.push(img));
+		let imgElements = Array<cheerio.Element>();
+		html("img").map((_, img) => imgElements.push(img));
 
-        // Create list for files to be downloaded
-        // Original URL, new path, image element
-        let downloadList = Array<[string, string, cheerio.Element]>();
-        imgElements.forEach((img) => {
-            let originalUrl = img.attribs["src"];
+		// Create list for files to be downloaded
+		// Original URL, new path, image element
+		let downloadList = Array<[string, string, cheerio.Element]>();
+		imgElements.forEach((img) => {
+			let originalUrl = img.attribs["src"];
 
-            // iBooks wants any image file extension to render. 
-            // Doesn't *have to* match the actual file type, but a mismatch causes a warning. 
-            let ext = path.parse(originalUrl).ext || "png";
-            let newName = Math.random().toString().substr(2, 8) + "." + ext;
+			// iBooks wants any image file extension to render.
+			// Doesn't *have to* match the actual file type, but a mismatch causes a warning.
+			let ext = path.parse(originalUrl).ext || "png";
+			let newName = Math.random().toString().substr(2, 8) + "." + ext;
 
-            downloadList.push([originalUrl, newName, img]);
-        });
+			downloadList.push([originalUrl, newName, img]);
+		});
 
-        let fetchPromises = Array<Promise<void>>();
-        downloadList.forEach(([originalUrl, newName, element]) => {
-            fetchPromises.push(new Promise(async (resolve, reject) => {
-                // Get file
-                let response = await fetch(originalUrl);
+		let fetchPromises = Array<Promise<void>>();
+		downloadList.forEach(([originalUrl, newName, element]) => {
+			fetchPromises.push(
+				new Promise(async (resolve, reject) => {
+					// Get file
+					let response = await fetch(originalUrl);
 
-                // Write file
-                await fs.promises.writeFile(tmpPath + newName, response.body || "failed");
+					// Write file
+					await fs.promises.writeFile(
+						tmpPath + newName,
+						response.body || "failed"
+					);
 
-                // Replace reference ("../images/" is a hard coded path nodepub copies files to)
-                element.attribs["src"] = "../images/" + newName;
+					// Replace reference ("../images/" is a hard coded path nodepub copies files to)
+					element.attribs["src"] = "../images/" + newName;
 
-                // If there's no alt tag, add an empty one (avoids warning)
-                if (!element.attribs["alt"]) {
-                    element.attribs["alt"] = "";
-                }
+					// If there's no alt tag, add an empty one (avoids warning)
+					if (!element.attribs["alt"]) {
+						element.attribs["alt"] = "";
+					}
 
-                // Resolve promise
-                if (response.body) { resolve(); } else { reject(new Error("Request failed")); }
-            }));
-        });
+					// Resolve promise
+					if (response.body) {
+						resolve();
+					} else {
+						reject(new Error("Request failed"));
+					}
+				})
+			);
+		});
 
-        let images = Array<string>();
-        downloadList.forEach(([originalUrl, newName, element]) => {
-            images.push(tmpPath + newName);
-        });
+		let images = Array<string>();
+		downloadList.forEach(([originalUrl, newName, element]) => {
+			images.push(tmpPath + newName);
+		});
 
-        // Download all images
-        await Promise.all(fetchPromises);
+		// Download all images
+		await Promise.all(fetchPromises);
 
-        // Write modified content
-        let newContent = root.html();
-        if (newContent) {
-            resolve([newContent, images]);
-        } else { reject(new Error("Re-rendering failed :(")); }
-    });
+		// Write modified content
+		let newContent = root.html();
+		if (newContent) {
+			resolve([newContent, images]);
+		} else {
+			reject(new Error("Re-rendering failed :("));
+		}
+	});
 }
 
-main(args);
+// Web API stuff
+
+import Koa, { Context } from "koa";
+import koaBody from "koa-body";
+
+const app = new Koa();
+app.use(koaBody({ includeUnparsed: true }));
+
+app.use(async (ctx: Context) => {
+	const path = ctx.path;
+	console.log(ctx.method, path);
+
+	// We're DIYing the router because the built-in one makes it hard to get content behind a /
+	if (path.startsWith("/epub")) {
+		let url: URL;
+		try {
+			let urlString = path.replace("/epub/", "");
+
+			// Nothing provided and GET
+			if (!urlString) {
+				return;
+			}
+
+			url = new URL(urlString); // Error kinda expeced
+
+			if (url.protocol != "https:" && url.protocol != "http:") {
+				throw new Error(
+					"Sorry friend, this protocol isn't supported: " +
+						url.protocol
+				);
+			}
+		} catch (error) {
+			console.error(error);
+			ctx.status = 400;
+			ctx.body = error;
+			return;
+		}
+
+		let epubPath = await makeEpub(url);
+		let epubName = epubPath.split("/").pop();
+
+		let epub = await fs.promises.readFile(epubPath);
+
+		ctx.set("content-type", "application/epub+zip");
+		ctx.set("content-disposition", `attachment; filename="${epubName}"`);
+
+		ctx.body = epub;
+	} else if (path.startsWith("/save")) {
+		let token: string;
+
+		try {
+			// /save/<token>/<url to save>
+			token = path.replace(/\/save\//, "").split("/")[0]; // Error kinda expeced
+
+			ctx.body = token;
+
+			let directory = directories.get(token);
+			if (!directory) {
+				throw new Error("Invalid token " + token);
+			}
+
+			// Authenticated
+			console.info(
+				"Authenticated.",
+				"Token:",
+				token,
+				"Directory:",
+				directory
+			);
+
+			// Get URL // Remove token
+			let urlString = path
+				.replace(/\/save\//, "")
+				.replace(token + "/", "");
+
+			// Welcome page if no URL given
+			if (!urlString) {
+				ctx.body = `Welcome. Append this URL with an article's to save it to your associated directory ${directory}`;
+			}
+
+			let url = new URL(urlString);
+
+			// Make and save epub
+			let epubPath = await makeEpub(url);
+			let epubName = epubPath.split("/").pop();
+
+			let newPath = directory + "/" + epubName;
+
+			console.info("Copying" + epubPath + " to " + newPath);
+			await fs.promises.copyFile(epubPath, newPath);
+
+			// Success message
+			ctx.body = `Saved article ${urlString} to ${newPath}`;
+		} catch (error) {
+			console.error(error);
+			ctx.status = 400;
+			ctx.body = error;
+			return;
+		}
+	}
+});
+
+app.listen(3000);
