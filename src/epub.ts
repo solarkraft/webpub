@@ -184,7 +184,16 @@ async function createCoverImage(path: string, title: string) {
 			let lastLine = ""
 			let newLine = ""
 
-			title.split(" ").forEach(async (word, i) => {
+			for (let word of title.split(" ")) {
+				while (
+					ctx.measureText(word).width + sideMargin * 2 >
+					coverImage.width
+				) {
+					// Single word is too wide, we have to go smaller
+					drawTitle(title, fontSize - 20)
+					return
+				}
+
 				newLine = lastLine + word + " "
 
 				if (ctx.measureText(newLine).width + x * 2 < coverImage.width) {
@@ -199,7 +208,7 @@ async function createCoverImage(path: string, title: string) {
 					// Clear next line (except last word)
 					lastLine = word + " "
 				}
-			})
+			}
 			// Write last line
 			ctx.fillText(lastLine, x, y)
 
