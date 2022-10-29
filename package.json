@@ -1,6 +1,6 @@
 {
   "name": "webread",
-  "version": "0.3",
+  "version": "0.4",
   "description": "Generate an epub file from a web page",
   "scripts": {
     "start": "node --loader ts-node/esm src/main.ts"
@@ -22,7 +22,8 @@
     "cheerio": "^1.0.0-rc.10",
     "html-entities": "^2.3.2",
     "node-fetch": "^3.2.0",
-    "nodepub": "^3.0.7"
+    "nodepub": "^3.0.7",
+    "request": "^2.88.2"
   },
   "type": "module"
 }
