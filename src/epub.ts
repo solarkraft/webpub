@@ -114,7 +114,7 @@ export async function makeEpub(articles: { url: URL, title?: string}[]) {
 		// Required
 		id: id,
 		cover: tmpDir + "cover.png",
-		title: page.title || page.url,
+		title: title || page.title || page.url,
 		author: page.author || page.domain,
 
 		// Optional
