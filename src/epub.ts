@@ -75,69 +75,77 @@ async function parsePage(url: URL) {
 	return { content, description, page }
 }
 
-export async function makeEpub(articles: { url: URL, title?: string}[]) {
-	let url = articles[0].url
-	let title = articles[0].title
-
-	let id = Math.random().toString().substr(2, 8)
-
-	let tmpDir = tmpdir() + `/epub/${id}/`
-	// console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
-
+async function makeEpubSection(
+	{ url, title }: { url: URL; title?: string },
+	tmpDir: string
+) {
 	await fs.promises.mkdir(tmpDir, { recursive: true })
 
 	console.info("Parsing web page " + url.toString())
 
 	let { content, description, page } = await parsePage(url)
 
-	let createCover = async () => {
-		// Generate cover image
-		console.info("Generating cover image")
-		await createCoverImage(tmpDir + "cover.png", page.title || page.url)
-		console.info("Wrote cover image")
-	}
-
 	// List of image paths
 	let images = Array<string>()
 
-	let getImages = async () => {
-		console.info("Getting images")
-		;[content, images] = await fetchAndReplaceImages(content, tmpDir)
-		console.info("Got all images")
-	}
+	console.info("Getting images")
+	;[content, images] = await fetchAndReplaceImages(content, tmpDir)
+	console.info("Got all images")
 
-	// Do these simultaneously because both can take a while
-	await Promise.all([createCover(), getImages()])
+	let sectionTitle = title || page.title || url.toString()
+
+	return { title:sectionTitle, description, content, page, images, url }
+}
+
+export async function makeEpub(articles: { url: URL; title?: string }[], bookTitle?: string) {
+
+	let id = Math.random().toString().substr(2, 8)
+
+	let tmpDir = tmpdir() + `/epub/${id}/`
+	// console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
+	await fs.promises.mkdir(tmpDir, { recursive: true })
+
+	let sections = await Promise.all(
+		articles.map((article) => makeEpubSection(article, tmpDir))
+	)
+	let firstSection = sections[0]
+
+	console.info("Generating cover image")
+		await createCoverImage(
+			tmpDir + "cover.png",
+			firstSection.page.title || firstSection.page.url
+		)
+		console.info("Wrote cover image")
+
+	let images = sections.flatMap(section => section.images)
 
 	// Metadata for the epub file
 	let meta = {
 		// Required
 		id: id,
 		cover: tmpDir + "cover.png",
-		title: title || page.title || page.url,
-		author: page.author || page.domain,
+		title: bookTitle || firstSection.page.title || firstSection.page.url,
+		author: firstSection.page.author || firstSection.page.domain,
 
 		// Optional
-		description: description,
+		description: firstSection.description,
 		showContents: false, // There is only one section
-		source: url.toString(),
+		source: firstSection.page.url.toString(),
 		images: images, // List of image file paths that will be included
 
-		published: page.date_published || "", // Not required, but validator complains if unset
+		published: firstSection.page.date_published || "", // Not required, but validator complains if unset
 		// language: 'en', // Not required, but validator complains if unset
 
-		series: page.domain,
-		publisher: page.domain,
+		series: firstSection.page.domain,
+		publisher: firstSection.page.domain,
 	}
-
-	let book = nodepub.document(meta)
-
 	console.info("Creating E-Book")
 
-	book.addSection(meta.title, content, false)
+	let book = nodepub.document(meta)
+	sections.forEach(section => book.addSection(section.title, section.content, false))
 
 	// Turn into (somewhat) friendly file name
-	let pageName = url.pathname.toString() + url.searchParams.toString()
+	let pageName = firstSection.url.pathname.toString() + firstSection.url.searchParams.toString()
 	let fileName = pageName
 		.replace(/[^a-z0-9\.]/gi, "_") // turn non-letters into underscores
 		.toLowerCase()
