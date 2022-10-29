@@ -1,6 +1,6 @@
 # webpub
 
-Takes one or multiple URLs (as GET form data) and makes epub files for them, de-cluttered using [Mercury Parser](https://github.com/postlight/parser) and embedding pictures. 
+Takes one or multiple URLs (as GET form data) and makes epub files for them, de-cluttered using the [Postlight Parser](https://github.com/postlight/parser) and embedding pictures. 
 
 Offers a form to input URLs. 
 
@@ -10,4 +10,4 @@ Spin it up using `pnpm install && pnpm run start` and visit http://localhost:300
 
 ## Readiness
 
-There are bugs left. Some web pages can't be parsed by Mercury Parser, for some the image fetching fails (the latter is likely more common). 
+There are bugs left. Some web pages can't be parsed by the Postlight Parser, for some the image fetching fails (the latter is likely more common). 
