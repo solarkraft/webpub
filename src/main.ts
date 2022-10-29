@@ -29,14 +29,15 @@ app.use(async (ctx: Context, next) => {
 
 	// Queries come like { url: [ 'url1', 'url2' ], title: [ 'title1', 'title2' ] }
 	// Re-pack them to article objects [{url: "url1", title: "title1"}, {url: "url2", title: "title2"}]
-	let articles: { url: string, title?: string }[] = []
+	let articles: { url: URL, title?: string }[] = []
 	for (let i = 0; i < urls.length; i++) {
-		articles[i] = { url: urls[i], title: titles[i] }
+		if(!urls[i]) continue // Missing URLs get skipped
+		articles[i] = { url: new URL(urls[i]), title: titles[i] }
 	}
 
 	console.log("Articles:", articles)
 
-	let filePath = await makeEpub(new URL(articles[0].url))
+	let filePath = await makeEpub(articles[0].url)
 
 	// Get file
 	let file = fs.createReadStream(filePath)
