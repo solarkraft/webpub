@@ -94,11 +94,13 @@ async function makeEpubSection(
 
 	let sectionTitle = title || page.title || url.toString()
 
-	return { title:sectionTitle, description, content, page, images, url }
+	return { title: sectionTitle, description, content, page, images, url }
 }
 
-export async function makeEpub(articles: { url: URL; title?: string }[], bookTitle?: string) {
-
+export async function makeEpub(
+	articles: { url: URL; title?: string }[],
+	customBookTitle?: string
+) {
 	let id = Math.random().toString().substr(2, 8)
 
 	let tmpDir = tmpdir() + `/epub/${id}/`
@@ -109,22 +111,21 @@ export async function makeEpub(articles: { url: URL; title?: string }[], bookTit
 		articles.map((article) => makeEpubSection(article, tmpDir))
 	)
 	let firstSection = sections[0]
+	let bookTitle =
+		customBookTitle || firstSection.page.title || firstSection.page.url
 
 	console.info("Generating cover image")
-		await createCoverImage(
-			tmpDir + "cover.png",
-			firstSection.page.title || firstSection.page.url
-		)
-		console.info("Wrote cover image")
+	await createCoverImage(tmpDir + "cover.png", bookTitle)
+	console.info("Wrote cover image")
 
-	let images = sections.flatMap(section => section.images)
+	let images = sections.flatMap((section) => section.images)
 
 	// Metadata for the epub file
 	let meta = {
 		// Required
 		id: id,
 		cover: tmpDir + "cover.png",
-		title: bookTitle || firstSection.page.title || firstSection.page.url,
+		title: bookTitle,
 		author: firstSection.page.author || firstSection.page.domain,
 
 		// Optional
@@ -142,10 +143,14 @@ export async function makeEpub(articles: { url: URL; title?: string }[], bookTit
 	console.info("Creating E-Book")
 
 	let book = nodepub.document(meta)
-	sections.forEach(section => book.addSection(section.title, section.content, false))
+	sections.forEach((section) =>
+		book.addSection(section.title, section.content, false)
+	)
 
 	// Turn into (somewhat) friendly file name
-	let pageName = firstSection.url.pathname.toString() + firstSection.url.searchParams.toString()
+	let pageName =
+		firstSection.url.pathname.toString() +
+		firstSection.url.searchParams.toString()
 	let fileName = pageName
 		.replace(/[^a-z0-9\.]/gi, "_") // turn non-letters into underscores
 		.toLowerCase()

@@ -38,7 +38,10 @@ app.use(async (ctx: Context, next) => {
 
 		console.log("Articles:", articles)
 
-		let filePath = await makeEpub(articles)
+		let filePath = await makeEpub(
+			articles,
+			query.book_title as string | undefined
+		)
 
 		// Get file
 		let file = fs.createReadStream(filePath)
@@ -49,7 +52,7 @@ app.use(async (ctx: Context, next) => {
 			`attachment; filename=${path.basename(filePath)}`
 		)
 		ctx.body = file
-	} catch(err) {
+	} catch (err) {
 		ctx.response.status = 500
 		ctx.body = err
 	}
