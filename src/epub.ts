@@ -75,7 +75,10 @@ async function parsePage(url: URL) {
 	return { content, description, page }
 }
 
-export async function makeEpub(url: URL) {
+export async function makeEpub(articles: { url: URL, title?: string}[]) {
+	let url = articles[0].url
+	let title = articles[0].title
+
 	let id = Math.random().toString().substr(2, 8)
 
 	let tmpDir = tmpdir() + `/epub/${id}/`

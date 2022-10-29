@@ -37,7 +37,7 @@ app.use(async (ctx: Context, next) => {
 
 	console.log("Articles:", articles)
 
-	let filePath = await makeEpub(articles[0].url)
+	let filePath = await makeEpub(articles)
 
 	// Get file
 	let file = fs.createReadStream(filePath)
