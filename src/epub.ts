@@ -75,10 +75,7 @@ async function parsePage(url: URL) {
 	return { content, description, page }
 }
 
-async function makeEpubSection(
-	{ url, title }: { url: URL; title?: string },
-	tmpDir: string
-) {
+async function makeEpubSection({ url, title }: { url: URL; title?: string }, tmpDir: string) {
 	await fs.promises.mkdir(tmpDir, { recursive: true })
 
 	console.info("Parsing web page " + url.toString())
@@ -97,22 +94,16 @@ async function makeEpubSection(
 	return { title: sectionTitle, description, content, page, images, url }
 }
 
-export async function makeEpub(
-	articles: { url: URL; title?: string }[],
-	customBookTitle?: string
-) {
+export async function makeEpub(articles: { url: URL; title?: string }[], customBookTitle?: string) {
 	let id = Math.random().toString().substr(2, 8)
 
 	let tmpDir = tmpdir() + `/epub/${id}/`
 	// console.log("tmpDir:", tmpDir); // Not /tmp, quite cryptic and random on macOS
 	await fs.promises.mkdir(tmpDir, { recursive: true })
 
-	let sections = await Promise.all(
-		articles.map((article) => makeEpubSection(article, tmpDir))
-	)
+	let sections = await Promise.all(articles.map((article) => makeEpubSection(article, tmpDir)))
 	let firstSection = sections[0]
-	let bookTitle =
-		customBookTitle || firstSection.page.title || firstSection.page.url
+	let bookTitle = customBookTitle || firstSection.page.title || firstSection.page.url
 
 	console.info("Generating cover image")
 	await createCoverImage(tmpDir + "cover.png", bookTitle)
@@ -143,14 +134,10 @@ export async function makeEpub(
 	console.info("Creating E-Book")
 
 	let book = nodepub.document(meta)
-	sections.forEach((section) =>
-		book.addSection(section.title, section.content, false)
-	)
+	sections.forEach((section) => book.addSection(section.title, section.content, false))
 
 	// Turn into (somewhat) friendly file name
-	let pageName =
-		firstSection.url.pathname.toString() +
-		firstSection.url.searchParams.toString()
+	let pageName = firstSection.url.pathname.toString() + firstSection.url.searchParams.toString()
 	let fileName = pageName
 		.replace(/[^a-z0-9\.]/gi, "_") // turn non-letters into underscores
 		.toLowerCase()
@@ -190,10 +177,7 @@ async function createCoverImage(path: string, title: string) {
 			let newLine = ""
 
 			for (let word of title.split(" ")) {
-				while (
-					ctx.measureText(word).width + sideMargin * 2 >
-					coverImage.width
-				) {
+				while (ctx.measureText(word).width + sideMargin * 2 > coverImage.width) {
 					// Single word is too wide, we have to go smaller
 					drawTitle(title, fontSize - 20)
 					return
@@ -238,10 +222,7 @@ async function createCoverImage(path: string, title: string) {
 }
 
 /** Download images from the web, place them in the temp folder and replace references in the HTML. returns the new content and the list of images */
-async function fetchAndReplaceImages(
-	oldContent: string,
-	tmpPath: string
-): Promise<[string, Array<string>]> {
+async function fetchAndReplaceImages(oldContent: string, tmpPath: string): Promise<[string, Array<string>]> {
 	return new Promise<[string, Array<string>]>(async (resolve, reject) => {
 		const html = cheerio.load(oldContent, { xml: true })
 		const root = html.root()
@@ -271,10 +252,7 @@ async function fetchAndReplaceImages(
 					let response = await fetch(originalUrl)
 
 					// Write file
-					await fs.promises.writeFile(
-						tmpPath + newName,
-						response.body || "failed"
-					)
+					await fs.promises.writeFile(tmpPath + newName, response.body || "failed")
 
 					// Replace reference ("../images/" is a hard coded path nodepub copies files to)
 					element.attribs["src"] = "../images/" + newName

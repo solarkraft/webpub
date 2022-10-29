@@ -38,19 +38,13 @@ app.use(async (ctx: Context, next) => {
 
 		console.log("Articles:", articles)
 
-		let filePath = await makeEpub(
-			articles,
-			query.book_title as string | undefined
-		)
+		let filePath = await makeEpub(articles, query.book_title as string | undefined)
 
 		// Get file
 		let file = fs.createReadStream(filePath)
 
 		ctx.response.set("content-type", "application/epub+zip")
-		ctx.response.set(
-			"content-disposition",
-			`attachment; filename=${path.basename(filePath)}`
-		)
+		ctx.response.set("content-disposition", `attachment; filename=${path.basename(filePath)}`)
 		ctx.body = file
 	} catch (err) {
 		ctx.response.status = 500
